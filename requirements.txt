@@ -5,7 +5,5 @@ eventlet
 gunicorn
 numpy
 opencv-python-headless
-mediapipe
-tflite-runtime
-# If tflite-runtime won't install on the build image, replace the last line with:
-# tensorflow-cpu==2.11.0
+mediapipe==0.10.14
+tensorflow==2.14.0
