@@ -42,5 +42,8 @@ def predict():
 
     predicted_class = label_encoder.classes_[predicted_class_idx]
     return jsonify({"gesture": predicted_class, "confidence": confidence})
+    if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
 
 
