@@ -1,65 +1,62 @@
 import os
+import pickle
 import numpy as np
 import tensorflow as tf
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# ---------------------------
-# Load TFLite model
-# ---------------------------
-interpreter = tf.lite.Interpreter(model_path="hand_gesture_model.tflite")
+# ----------------------------
+# Load TensorFlow Lite Model
+# ----------------------------
+interpreter = tf.lite.Interpreter(model_path="morse_model.tflite")
 interpreter.allocate_tensors()
 
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-# Class labels for your model
-class_labels = ["Dot", "Dash", "Next", "Del", "Space"]
+# ----------------------------
+# Load Label Encoder
+# ----------------------------
+with open("label_encoder.pkl", "rb") as f:
+    label_encoder = pickle.load(f)
 
-# ---------------------------
-# Flask app setup
-# ---------------------------
+# ----------------------------
+# Flask App Setup
+# ----------------------------
 app = Flask(__name__)
 CORS(app)
 
-@app.route("/")
+@app.route("/", methods=["GET"])
 def home():
-    return "✅ GestureSpeak server running with HTTP API"
+    return "GestureSpeak server running!"
 
-# ---------------------------
-# Prediction endpoint
-# ---------------------------
 @app.route("/predict", methods=["POST"])
 def predict():
-    try:
-        data = request.json
-        if "landmarks" not in data:
-            return jsonify({"error": "No landmarks provided"}), 400
+    data = request.json.get("landmarks")  # Flutter should send list of 42 floats
+    
+    if not data or len(data) != 42:
+        return jsonify({"error": "Expected 42 landmark values"}), 400
 
-        # Expecting landmarks as a flat list of 42 floats
-        landmarks = np.array(data["landmarks"], dtype=np.float32).reshape(1, -1)
+    # Prepare input
+    input_data = np.array([data], dtype=np.float32)
+    interpreter.set_tensor(input_details[0]['index'], input_data)
+    interpreter.invoke()
 
-        # Run inference
-        interpreter.set_tensor(input_details[0]["index"], landmarks)
-        interpreter.invoke()
-        output_data = interpreter.get_tensor(output_details[0]["index"])
+    # Get output
+    output_data = interpreter.get_tensor(output_details[0]['index'])
+    predicted_class_idx = int(np.argmax(output_data[0]))
+    confidence = float(np.max(output_data[0]))
 
-        # Get predicted class
-        predicted_idx = int(np.argmax(output_data))
-        predicted_class = class_labels[predicted_idx]
+    # Apply confidence threshold
+    if confidence < 0.85:
+        return jsonify({"gesture": "Unknown", "confidence": confidence})
 
-        return jsonify({
-            "prediction": predicted_class,
-            "confidence": float(np.max(output_data))
-        })
+    predicted_class = label_encoder.classes_[predicted_class_idx]
+    return jsonify({"gesture": str(predicted_class), "confidence": confidence})
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# ---------------------------
-# Main
-# ---------------------------
+# ----------------------------
+# Run Server
+# ----------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    port = int(os.environ.get("PORT", 5000))  # Railway sets PORT automatically
+    app.run(host="0.0.0.0", port=port)
