@@ -15,7 +15,7 @@ import mediapipe as mp
 # ----------------------------
 # Configuration
 # ----------------------------
-MODEL_PATH = "hand_gesture_model.tflite"
+MODEL_PATH = "morse_model.tflite"
 LABEL_ENCODER_PATH = "label_encoder.pkl"
 CONFIDENCE_THRESHOLD = 0.85
 MIN_STABLE_FRAMES = 8         # number of consecutive frames required to consider a gesture "stable"
