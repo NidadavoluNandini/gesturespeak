@@ -28,31 +28,35 @@ CORS(app)
 
 @app.route("/", methods=["GET"])
 def home():
-    return "GestureSpeak server running!"
+    return "✅ GestureSpeak server is running!"
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    data = request.json.get("landmarks")  # Flutter should send list of 42 floats
-    
+    data = request.json.get("landmarks")  # Expecting list of 42 floats
+
     if not data or len(data) != 42:
         return jsonify({"error": "Expected 42 landmark values"}), 400
 
-    # Prepare input
-    input_data = np.array([data], dtype=np.float32)
-    interpreter.set_tensor(input_details[0]['index'], input_data)
-    interpreter.invoke()
+    try:
+        # Prepare input
+        input_data = np.array([data], dtype=np.float32)
+        interpreter.set_tensor(input_details[0]['index'], input_data)
+        interpreter.invoke()
 
-    # Get output
-    output_data = interpreter.get_tensor(output_details[0]['index'])
-    predicted_class_idx = int(np.argmax(output_data[0]))
-    confidence = float(np.max(output_data[0]))
+        # Get output
+        output_data = interpreter.get_tensor(output_details[0]['index'])
+        predicted_class_idx = int(np.argmax(output_data[0]))
+        confidence = float(np.max(output_data[0]))
 
-    # Apply confidence threshold
-    if confidence < 0.85:
-        return jsonify({"gesture": "Unknown", "confidence": confidence})
+        # Apply confidence threshold
+        if confidence < 0.85:
+            return jsonify({"gesture": "Unknown", "confidence": confidence})
 
-    predicted_class = label_encoder.classes_[predicted_class_idx]
-    return jsonify({"gesture": str(predicted_class), "confidence": confidence})
+        predicted_class = label_encoder.classes_[predicted_class_idx]
+        return jsonify({"gesture": str(predicted_class), "confidence": confidence})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ----------------------------
 # Run Server
