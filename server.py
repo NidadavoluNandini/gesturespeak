@@ -5,17 +5,14 @@ import tensorflow as tf
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# Load TFLite model
 interpreter = tf.lite.Interpreter(model_path="morse_model.tflite")
 interpreter.allocate_tensors()
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-# Load label encoder
 with open("label_encoder.pkl", "rb") as f:
     label_encoder = pickle.load(f)
 
-# Flask setup
 app = Flask(__name__)
 CORS(app)
 
@@ -25,7 +22,7 @@ def home():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    data = request.json.get("landmarks")  # Expecting list of 42 floats
+    data = request.json.get("landmarks")
 
     if not data or len(data) != 42:
         return jsonify({"error": "Expected 42 landmark values"}), 400
@@ -43,7 +40,7 @@ def predict():
             return jsonify({"symbol": "", "confidence": confidence})
 
         predicted_class = label_encoder.classes_[predicted_class_idx]
-        morse_symbol = str(predicted_class)  # ".", "-", or " "
+        morse_symbol = str(predicted_class)
         return jsonify({"symbol": morse_symbol, "confidence": confidence})
 
     except Exception as e:
