@@ -25,7 +25,7 @@ def home():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    data = request.json.get("landmarks")  # Expecting 42 floats
+    data = request.json.get("landmarks")  # Expecting list of 42 floats
 
     if not data or len(data) != 42:
         return jsonify({"error": "Expected 42 landmark values"}), 400
