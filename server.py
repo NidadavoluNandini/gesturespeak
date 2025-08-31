@@ -5,6 +5,11 @@ import tensorflow as tf
 
 app = Flask(__name__)
 
+# Health check route for Railway
+@app.route("/")
+def health():
+    return "GestureSpeak server is running"
+
 # Load TFLite model
 try:
     interpreter = tf.lite.Interpreter(model_path="morse_model.tflite")
@@ -26,7 +31,7 @@ except Exception as e:
 def extract_landmarks_from_image(base64_str):
     try:
         # Decode base64 image (placeholder logic)
-        # Replace this with actual landmark extraction (e.g., MediaPipe Hands)
+        # Replace with actual landmark extraction later
         _ = base64.b64decode(base64_str)  # Just to validate input
         return np.full((1, 42), 0.5, dtype=np.float32)
     except Exception as e:
@@ -60,4 +65,4 @@ def predict():
         return jsonify({"error": "Server error"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000)
