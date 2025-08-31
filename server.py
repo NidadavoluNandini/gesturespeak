@@ -1,18 +1,15 @@
-import os
-import threading
 from flask import Flask, jsonify
-import inference_tflite  # your inference file
+import threading
+import inference_tflite  # our inference script
 
 app = Flask(__name__)
 is_running = False
+thread = None
 
 
 @app.route('/start_inference', methods=['POST'])
 def start_inference():
-    """
-    Start inference in a background thread so HTTP responds immediately.
-    """
-    global is_running
+    global is_running, thread
     if is_running:
         return jsonify({"status": "already running"})
 
@@ -20,31 +17,34 @@ def start_inference():
         global is_running
         is_running = True
         try:
-            inference_tflite.run_inference()   # call your function
+            inference_tflite.run_inference()
         except Exception as e:
-            print("Error while running inference:", e, flush=True)
+            print("❌ Error in inference:", e)
         finally:
             is_running = False
 
-    threading.Thread(target=run_model, daemon=True).start()
+    thread = threading.Thread(target=run_model, daemon=True)
+    thread.start()
+
     return jsonify({"status": "inference started"})
 
 
 @app.route('/stop_inference', methods=['POST'])
 def stop_inference():
-    """
-    Currently, inference_tflite must handle stopping logic.
-    For now we just return a message.
-    """
-    return jsonify({"status": "stop not implemented in server, press 'q' locally"})
+    global is_running
+    if not is_running:
+        return jsonify({"status": "not running"})
+
+    inference_tflite.stop_inference()
+    return jsonify({"status": "stopping inference..."})
 
 
-@app.route('/', methods=['GET'])
+@app.route("/", methods=["GET"])
 def home():
-    return jsonify({"status": "✅ GestureSpeak server is running"})
+    return "✅ GestureSpeak server (Python 3.10) is running!"
 
 
 if __name__ == '__main__':
-    # Railway provides PORT env var
+    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
