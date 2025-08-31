@@ -1,72 +1,36 @@
-import os
-import pickle
-import numpy as np
-import tensorflow as tf
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, jsonify, request
+import threading
+import inference  # your existing inference.py file
 
-# ----------------------------
-# Load TensorFlow Lite Model
-# ----------------------------
-interpreter = tf.lite.Interpreter(model_path="morse_model.tflite")
-interpreter.allocate_tensors()
-
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
-
-# ----------------------------
-# Load Label Encoder
-# ----------------------------
-with open("label_encoder.pkl", "rb") as f:
-    label_encoder = pickle.load(f)
-
-# ----------------------------
-# Flask App Setup
-# ----------------------------
 app = Flask(__name__)
-CORS(app)
 
-@app.route("/", methods=["GET"])
-def home():
-    return "✅ GestureSpeak server is running!"
+is_running = False
 
-@app.route("/predict", methods=["POST"])
-def predict():
-    data = request.json.get("landmarks")
+@app.route('/start_inference', methods=['POST'])
+def start_inference():
+    global is_running
+    if is_running:
+        return jsonify({"status": "already running"})
 
-    # Validate input
-    if not data or not isinstance(data, list) or len(data) != 42:
-        return jsonify({"error": "Expected 42 landmark values"}), 400
+    def run_model():
+        global is_running
+        is_running = True
+        try:
+            inference.run_inference()   # call function inside inference.py
+        except Exception as e:
+            print("Error:", e)
+        finally:
+            is_running = False
 
-    try:
-        # Prepare input
-        input_data = np.array([data], dtype=np.float32)
-        interpreter.set_tensor(input_details[0]['index'], input_data)
-        interpreter.invoke()
+    # Run inference in background thread
+    threading.Thread(target=run_model).start()
 
-        # Get output
-        output_data = interpreter.get_tensor(output_details[0]['index'])
-        predicted_class_idx = int(np.argmax(output_data[0]))
-        confidence = float(np.max(output_data[0]))
+    return jsonify({"status": "inference started"})
 
-        # Apply confidence threshold
-        if confidence < 0.85:
-            return jsonify({"symbol": "Unknown", "confidence": confidence})
+@app.route('/stop_inference', methods=['POST'])
+def stop_inference():
+    # You can add logic to stop your inference loop
+    return jsonify({"status": "inference stopped"})
 
-        predicted_class = label_encoder.classes_[predicted_class_idx]
-        morse_symbol = str(predicted_class)
-
-        # Optional: log for debugging
-        print(f"Predicted: {morse_symbol}, Confidence: {confidence}")
-
-        return jsonify({"symbol": morse_symbol, "confidence": confidence})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# ----------------------------
-# Run Server
-# ----------------------------
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=5000)
