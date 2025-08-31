@@ -61,7 +61,7 @@ def extract_landmarks_from_image(base64_str):
             print("⚠️ No hand detected")
             return None
 
-        # Take first hand
+        # Take first detected hand
         hand_landmarks = results.multi_hand_landmarks[0]
         x_ = [lm.x for lm in hand_landmarks.landmark]
         y_ = [lm.y for lm in hand_landmarks.landmark]
@@ -113,4 +113,5 @@ def predict():
 # -----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+    # Railway will override $PORT automatically
     app.run(host="0.0.0.0", port=port)
