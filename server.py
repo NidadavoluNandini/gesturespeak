@@ -6,39 +6,58 @@ import tensorflow as tf
 app = Flask(__name__)
 
 # Load TFLite model
-interpreter = tf.lite.Interpreter(model_path="morse_model.tflite")
-interpreter.allocate_tensors()
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
+try:
+    interpreter = tf.lite.Interpreter(model_path="morse_model.tflite")
+    interpreter.allocate_tensors()
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+except Exception as e:
+    print(f"Error loading model: {e}")
+    raise
 
 # Load labels
-with open("labels_encoder.txt", "r") as f:
-    labels = [line.strip() for line in f.readlines()]
+try:
+    with open("labels_encoder.txt", "r") as f:
+        labels = [line.strip() for line in f if line.strip()]
+except Exception as e:
+    print(f"Error loading labels: {e}")
+    labels = []
 
 def extract_landmarks_from_image(base64_str):
-    # Decode base64 image (placeholder logic)
-    # Replace this with actual landmark extraction (e.g., MediaPipe Hands)
-    return np.full((1, 42), 0.5, dtype=np.float32)
+    try:
+        # Decode base64 image (placeholder logic)
+        # Replace this with actual landmark extraction (e.g., MediaPipe Hands)
+        _ = base64.b64decode(base64_str)  # Just to validate input
+        return np.full((1, 42), 0.5, dtype=np.float32)
+    except Exception as e:
+        print(f"Error decoding image: {e}")
+        return None
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    data = request.get_json()
-    image_b64 = data.get("image")
+    try:
+        data = request.get_json(force=True)
+        image_b64 = data.get("image")
 
-    if not image_b64:
-        return jsonify({"error": "Missing image"}), 400
+        if not image_b64:
+            return jsonify({"error": "Missing image"}), 400
 
-    input_data = extract_landmarks_from_image(image_b64)
+        input_data = extract_landmarks_from_image(image_b64)
+        if input_data is None:
+            return jsonify({"error": "Invalid image data"}), 400
 
-    interpreter.set_tensor(input_details[0]['index'], input_data)
-    interpreter.invoke()
-    output_data = interpreter.get_tensor(output_details[0]['index'])[0]
+        interpreter.set_tensor(input_details[0]['index'], input_data)
+        interpreter.invoke()
+        output_data = interpreter.get_tensor(output_details[0]['index'])[0]
 
-    max_idx = int(np.argmax(output_data))
-    confidence = float(output_data[max_idx])
-    label = labels[max_idx]
+        max_idx = int(np.argmax(output_data))
+        confidence = float(output_data[max_idx])
+        label = labels[max_idx] if max_idx < len(labels) else "Unknown"
 
-    return jsonify({"label": label, "confidence": confidence})
+        return jsonify({"label": label, "confidence": confidence})
+    except Exception as e:
+        print(f"Prediction error: {e}")
+        return jsonify({"error": "Server error"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=False)
