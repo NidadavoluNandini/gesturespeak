@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 import base64
 import numpy as np
 import tensorflow as tf
+import cv2
+import mediapipe as mp
 import os
 
 app = Flask(__name__)
@@ -10,32 +12,76 @@ app = Flask(__name__)
 def health():
     return "GestureSpeak server is running"
 
+# -----------------------------
 # Load TFLite model
+# -----------------------------
 try:
     interpreter = tf.lite.Interpreter(model_path="morse_model.tflite")
     interpreter.allocate_tensors()
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
+    print("✅ TFLite model loaded")
 except Exception as e:
-    print(f"Error loading model: {e}")
+    print(f"❌ Error loading model: {e}")
     raise
 
+# -----------------------------
 # Load labels
+# -----------------------------
 try:
     with open("labels_encoder.txt", "r") as f:
         labels = [line.strip() for line in f if line.strip()]
+    print(f"✅ Labels loaded: {labels}")
 except Exception as e:
-    print(f"Error loading labels: {e}")
+    print(f"❌ Error loading labels: {e}")
     labels = []
 
+# -----------------------------
+# Mediapipe hands setup
+# -----------------------------
+mp_hands = mp.solutions.hands
+hands = mp_hands.Hands(static_image_mode=True, min_detection_confidence=0.3)
+
 def extract_landmarks_from_image(base64_str):
+    """Decode base64 image → extract 21 hand landmarks → return np.array shape (1, 42)."""
     try:
-        _ = base64.b64decode(base64_str)
-        return np.full((1, 42), 0.5, dtype=np.float32)
+        img_data = base64.b64decode(base64_str)
+        nparr = np.frombuffer(img_data, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if img is None:
+            print("❌ Error: Failed to decode image")
+            return None
+
+        # Convert to RGB for Mediapipe
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        results = hands.process(img_rgb)
+
+        if not results.multi_hand_landmarks:
+            print("⚠️ No hand detected")
+            return None
+
+        # Take first hand
+        hand_landmarks = results.multi_hand_landmarks[0]
+        x_ = [lm.x for lm in hand_landmarks.landmark]
+        y_ = [lm.y for lm in hand_landmarks.landmark]
+
+        data_aux = []
+        for lm in hand_landmarks.landmark:
+            data_aux.append(lm.x - min(x_))
+            data_aux.append(lm.y - min(y_))
+
+        if len(data_aux) == 42:
+            return np.array([data_aux], dtype=np.float32)
+        else:
+            return None
     except Exception as e:
-        print(f"Error decoding image: {e}")
+        print(f"❌ Error extracting landmarks: {e}")
         return None
 
+# -----------------------------
+# Prediction endpoint
+# -----------------------------
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
@@ -47,7 +93,7 @@ def predict():
 
         input_data = extract_landmarks_from_image(image_b64)
         if input_data is None:
-            return jsonify({"error": "Invalid image data"}), 400
+            return jsonify({"label": "Unknown", "confidence": 0.0}), 200
 
         interpreter.set_tensor(input_details[0]['index'], input_data)
         interpreter.invoke()
@@ -59,9 +105,12 @@ def predict():
 
         return jsonify({"label": label, "confidence": confidence})
     except Exception as e:
-        print(f"Prediction error: {e}")
+        print(f"❌ Prediction error: {e}")
         return jsonify({"error": "Server error"}), 500
 
+# -----------------------------
+# Run server
+# -----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
