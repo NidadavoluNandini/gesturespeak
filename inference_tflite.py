@@ -1,66 +1,43 @@
-import pickle
-import mediapipe as mp
-import numpy as np
-import tensorflow as tf
-import cv2
-import time
+import pickle, cv2, mediapipe as mp, numpy as np, tensorflow as tf, time
 
-# -------------------------------
-# Load TensorFlow Lite model
-# -------------------------------
+# MODE: "local" for debugging with cv2 window, "server" for Railway
+MODE = "server"
+
+# Load TFLite model
 interpreter = tf.lite.Interpreter(model_path='./morse_model.tflite')
 interpreter.allocate_tensors()
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
-# -------------------------------
 # Load label encoder
-# -------------------------------
 with open('label_encoder.pkl', 'rb') as f:
     label_encoder = pickle.load(f)
 
-# -------------------------------
-# Mediapipe Setup
-# -------------------------------
+# Mediapipe setup
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(static_image_mode=True, min_detection_confidence=0.3)
 
 labels_dict = {'0': 'Dot', '1': 'Dash', '2': 'BlankSpace', '3': 'BackSpace', '4': 'Next'}
 display_map = {'Dot': '.', 'Dash': '-', 'BlankSpace': ' '}
 
-# -------------------------------
-# Global State
-# -------------------------------
-displayed_text = ""
-current_character = ""
-last_gesture = ""
-gesture_stable_count = 0
-min_stable_frames = 10
-next_detected = False
-running = True  # To allow stopping later
-
-
-def run_inference():
-    """
-    Run hand gesture inference loop (headless).
-    Works in Railway – no imshow.
-    """
-    global displayed_text, current_character, last_gesture
-    global gesture_stable_count, next_detected, running
-
+# Main function
+def run_inference(max_frames=200):
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        print("❌ No camera available in this environment")
-        return
+        print("⚠️ Could not open camera")
+        return {"error": "camera not available"}
 
-    print("✅ Inference started (press Ctrl+C to stop in Railway logs)")
+    displayed_text = ""
+    current_character, last_gesture = "", ""
+    gesture_stable_count, next_detected = 0, False
+    min_stable_frames = 10
 
-    while running:
-        data_aux, x_, y_ = [], [], []
+    predictions = []  # collect for server mode
+
+    frame_count = 0
+    while True:
         ret, frame = cap.read()
-
         if not ret or frame is None:
-            print("⚠️ No frame from camera, stopping inference")
             break
 
         H, W, _ = frame.shape
@@ -68,22 +45,16 @@ def run_inference():
         results = hands.process(frame_rgb)
 
         if not results.multi_hand_landmarks:
-            gesture_stable_count = 0
-            last_gesture = ""
-            current_character = ""
+            gesture_stable_count, last_gesture, current_character = 0, "", ""
         else:
+            data_aux, x_, y_ = [], [], []
             for hand_landmarks in results.multi_hand_landmarks:
                 for i in range(len(hand_landmarks.landmark)):
-                    x = hand_landmarks.landmark[i].x
-                    y = hand_landmarks.landmark[i].y
-                    x_.append(x)
-                    y_.append(y)
-
+                    x, y = hand_landmarks.landmark[i].x, hand_landmarks.landmark[i].y
+                    x_.append(x); y_.append(y)
                 for i in range(len(hand_landmarks.landmark)):
-                    x = hand_landmarks.landmark[i].x
-                    y = hand_landmarks.landmark[i].y
-                    data_aux.append(x - min(x_))
-                    data_aux.append(y - min(y_))
+                    data_aux.append(hand_landmarks.landmark[i].x - min(x_))
+                    data_aux.append(hand_landmarks.landmark[i].y - min(y_))
 
             if len(data_aux) == 42:
                 input_data = np.array([data_aux], dtype=np.float32)
@@ -100,8 +71,7 @@ def run_inference():
                     if predicted_character == last_gesture:
                         gesture_stable_count += 1
                     else:
-                        gesture_stable_count = 0
-                        last_gesture = predicted_character
+                        gesture_stable_count, last_gesture = 0, predicted_character
 
                     if gesture_stable_count >= min_stable_frames:
                         if predicted_character == "Next" and not next_detected:
@@ -111,20 +81,23 @@ def run_inference():
                                 displayed_text += display_map.get(current_character, "")
                             next_detected = True
                         elif predicted_character != "Next":
-                            current_character = predicted_character
-                            next_detected = False
+                            current_character, next_detected = predicted_character, False
 
-                        print(f"👉 Gesture: {predicted_character}, Text: {displayed_text}")
-                else:
-                    gesture_stable_count = 0
+                        predictions.append(predicted_character)
 
-        time.sleep(0.05)  # Small delay
+        # ---- LOCAL MODE (debugging) ----
+        if MODE == "local":
+            cv2.imshow("Gesture Recognition", frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        # ---- SERVER MODE (stop after N frames) ----
+        frame_count += 1
+        if MODE == "server" and frame_count >= max_frames:
+            break
 
     cap.release()
-    print("🛑 Inference stopped.")
+    if MODE == "local":
+        cv2.destroyAllWindows()
 
-
-def stop_inference():
-    """ Stop the running loop safely """
-    global running
-    running = False
+    return {"text": displayed_text, "predictions": predictions}
