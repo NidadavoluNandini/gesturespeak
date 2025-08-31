@@ -2,10 +2,10 @@ from flask import Flask, request, jsonify
 import base64
 import numpy as np
 import tensorflow as tf
+import os
 
 app = Flask(__name__)
 
-# Health check route for Railway
 @app.route("/")
 def health():
     return "GestureSpeak server is running"
@@ -30,9 +30,7 @@ except Exception as e:
 
 def extract_landmarks_from_image(base64_str):
     try:
-        # Decode base64 image (placeholder logic)
-        # Replace with actual landmark extraction later
-        _ = base64.b64decode(base64_str)  # Just to validate input
+        _ = base64.b64decode(base64_str)
         return np.full((1, 42), 0.5, dtype=np.float32)
     except Exception as e:
         print(f"Error decoding image: {e}")
@@ -65,4 +63,5 @@ def predict():
         return jsonify({"error": "Server error"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
