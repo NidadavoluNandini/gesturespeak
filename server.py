@@ -1,51 +1,51 @@
-from flask import Flask, jsonify, request
-import threading
-import inference_tflite   # import your uploaded inference_tflite.py
+import os
+import pickle
+import numpy as np
+import tensorflow as tf
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
-app = Flask(__name__)
+interpreter = tf.lite.Interpreter(model_path="morse_model.tflite")
+interpreter.allocate_tensors()
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
 
-# Flags for thread management
-is_running = False
-thread = None
+with open("label_encoder.pkl", "rb") as f:
+    label_encoder = pickle.load(f)
 
+app = Flask(_name_)
+CORS(app)
 
 @app.route("/", methods=["GET"])
 def home():
-    return "✅ GestureSpeak server (Python 3.10) is running!"
+    return "✅ GestureSpeak server is running!"
 
+@app.route("/predict", methods=["POST"])
+def predict():
+    data = request.json.get("landmarks")
 
-@app.route("/start_inference", methods=["POST"])
-def start_inference():
-    global is_running, thread
-    if is_running:
-        return jsonify({"status": "already running"})
+    if not data or len(data) != 42:
+        return jsonify({"error": "Expected 42 landmark values"}), 400
 
-    def run_model():
-        global is_running
-        is_running = True
-        try:
-            inference_tflite.run_inference()
-        except Exception as e:
-            print("❌ Error in inference:", e)
-        finally:
-            is_running = False
+    try:
+        input_data = np.array([data], dtype=np.float32)
+        interpreter.set_tensor(input_details[0]['index'], input_data)
+        interpreter.invoke()
 
-    thread = threading.Thread(target=run_model, daemon=True)
-    thread.start()
+        output_data = interpreter.get_tensor(output_details[0]['index'])
+        predicted_class_idx = int(np.argmax(output_data[0]))
+        confidence = float(np.max(output_data[0]))
 
-    return jsonify({"status": "inference started"})
+        if confidence < 0.85:
+            return jsonify({"symbol": "", "confidence": confidence})
 
+        predicted_class = label_encoder.classes_[predicted_class_idx]
+        morse_symbol = str(predicted_class)
+        return jsonify({"symbol": morse_symbol, "confidence": confidence})
 
-@app.route("/stop_inference", methods=["POST"])
-def stop_inference():
-    global is_running
-    if not is_running:
-        return jsonify({"status": "not running"})
-    inference_tflite.stop_inference()
-    return jsonify({"status": "stopping inference..."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-
-if __name__ == "__main__":
-    import os
+if _name_ == "_main_":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
