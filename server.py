@@ -13,7 +13,7 @@ output_details = interpreter.get_output_details()
 with open("label_encoder.pkl", "rb") as f:
     label_encoder = pickle.load(f)
 
-app = Flask(_name_)
+app = Flask(__name__)   # ✅ FIXED
 CORS(app)
 
 @app.route("/", methods=["GET"])
@@ -45,6 +45,7 @@ def predict():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
