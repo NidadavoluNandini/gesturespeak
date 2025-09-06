@@ -6,7 +6,7 @@ import tensorflow as tf
 import time
 
 # Load the TensorFlow Lite model
-interpreter = tf.lite.Interpreter(model_path='./morse_model.tflite')
+interpreter = tf.lite.Interpreter(model_path='./hand_gesture_model.tflite')
 interpreter.allocate_tensors()
 
 # Get input and output tensors
