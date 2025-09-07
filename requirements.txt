@@ -1,28 +1,15 @@
-# Core
+# gesture_speak_backend - minimal compatible requirements (Python 3.10.x)
+
+# Core ML
 numpy==1.24.3
 tensorflow==2.13.0
-keras==2.13.1
 
-# TensorFlow dependencies
-protobuf==4.23.4
-h5py==3.8.0
-gast==0.4.0
-wrapt==1.15.0
-astunparse==1.6.3
-flatbuffers==23.5.26
-opt-einsum==3.3.0
-tensorboard==2.13.0
-tensorflow-io-gcs-filesystem==0.31.0
-typing-extensions==4.5.0
-libclang==16.0.6
-
-# API & Server
-fastapi==0.103.0
-uvicorn[standard]==0.23.2
-python-multipart==0.0.6
-pydantic==1.10.12
-starlette==0.27.0
-
-# Computer Vision / ML Utils
+# Computer vision / mediapipe
+mediapipe==0.10.21
 opencv-python==4.8.0.76
-mediapipe==0.9.1.0   # ✅ stable for Python 3.10
+pillow==10.0.0
+
+# Server / API
+fastapi==0.95.2
+uvicorn[standard]==0.22.0
+python-multipart==0.0.6
