@@ -1,51 +1,43 @@
-import os
-import pickle
-import numpy as np
-import tensorflow as tf
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+# server.py
+import base64, json, asyncio
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+from inference_tflite import predict_from_bytes, reset_state
 
-interpreter = tf.lite.Interpreter(model_path="morse_model.tflite")
-interpreter.allocate_tensors()
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], allow_credentials=True,
+    allow_methods=["*"], allow_headers=["*"],
+)
 
-with open("label_encoder.pkl", "rb") as f:
-    label_encoder = pickle.load(f)
+@app.get("/")
+async def root():
+    return {"status": "running"}
 
-app = Flask(__name__)   # ✅ FIXED
-CORS(app)
-
-@app.route("/", methods=["GET"])
-def home():
-    return "✅ GestureSpeak server is running!"
-
-@app.route("/predict", methods=["POST"])
-def predict():
-    data = request.json.get("landmarks")
-
-    if not data or len(data) != 42:
-        return jsonify({"error": "Expected 42 landmark values"}), 400
-
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    reset_state()
     try:
-        input_data = np.array([data], dtype=np.float32)
-        interpreter.set_tensor(input_details[0]['index'], input_data)
-        interpreter.invoke()
+        while True:
+            data = await ws.receive_text()
+            try:
+                payload = json.loads(data)
+                b64 = payload.get("image")
+            except:
+                b64 = data
+            if not b64:
+                await ws.send_text(json.dumps({"error": "no image"}))
+                continue
 
-        output_data = interpreter.get_tensor(output_details[0]['index'])
-        predicted_class_idx = int(np.argmax(output_data[0]))
-        confidence = float(np.max(output_data[0]))
-
-        if confidence < 0.85:
-            return jsonify({"symbol": "", "confidence": confidence})
-
-        predicted_class = label_encoder.classes_[predicted_class_idx]
-        morse_symbol = str(predicted_class)
-        return jsonify({"symbol": morse_symbol, "confidence": confidence})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+            image_bytes = base64.b64decode(b64.split(",")[-1])
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, predict_from_bytes, image_bytes)
+            await ws.send_text(json.dumps(result))
+    except WebSocketDisconnect:
+        print("Client disconnected")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)
