@@ -5,12 +5,10 @@ keras==2.13.1
 
 # Vision
 mediapipe==0.10.21
-opencv-python==4.8.0.76
+opencv-python-headless==4.8.0.76
 pillow==10.0.0
-flask
-gunicorn
 
 # Server
-fastapi==0.95.2
-uvicorn[standard]==0.22.0
-python-multipart==0.0.6
+flask==2.3.2
+flask-cors
+gunicorn==21.2.0
