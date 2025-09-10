@@ -1,5 +1,6 @@
 # gesturespeak
 
+---
 title: GestureSpeak
 emoji: ✋
 colorFrom: indigo
@@ -8,3 +9,4 @@ sdk: fastapi
 app_file: server.py
 pinned: false
 license: mit
+---
