@@ -1,14 +1,6 @@
-# Core ML
-numpy==1.24.3
-tensorflow==2.13.0
-keras==2.13.1
-
-# Vision
-mediapipe==0.10.21
-opencv-python-headless==4.8.0.76
-pillow==10.0.0
-
-# Server
-flask==2.3.2
-flask-cors
-gunicorn==21.2.0
+fastapi
+uvicorn
+tensorflow
+opencv-python-headless
+mediapipe
+numpy
